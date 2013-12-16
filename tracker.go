@@ -27,13 +27,14 @@ const (
 )
 
 type trackerPeerChans struct {
-	stats chan Stats
+	stats chan CurrentStats
 	peers chan PeerTuple
 }
 
 type trackerManager struct {
 	peerChans trackerPeerChans
 	port      uint16
+	statsCh   chan CurrentStats
 	t         tomb.Tomb
 }
 
@@ -56,7 +57,7 @@ type tracker struct {
 	peerChans   trackerPeerChans
 	completedCh chan bool
 	timer       <-chan time.Time
-	stats       Stats
+	stats       CurrentStats
 	key         string
 	port        uint16
 	infoHash    []byte
@@ -89,7 +90,9 @@ func (tr *tracker) Announce(event int) {
 	urlParams.Set("port", strconv.FormatUint(uint64(tr.port), 10))
 	urlParams.Set("uploaded", strconv.Itoa(tr.stats.Uploaded))
 	urlParams.Set("downloaded", strconv.Itoa(tr.stats.Downloaded))
-	urlParams.Set("left", strconv.Itoa(tr.stats.Left))
+	// FIXME: calculate bytes left to download
+	//urlParams.Set("left", strconv.Itoa(tr.stats.Left))
+	urlParams.Set("left", strconv.Itoa(0))
 	urlParams.Set("compact", "1")
 	switch event {
 	case Started:
@@ -181,11 +184,11 @@ func newTracker(key string, chans trackerPeerChans, port uint16, infoHash []byte
 	return tracker
 }
 
-func NewTrackerManager(port uint16) *trackerManager {
+func NewTrackerManager(port uint16, statsCh chan CurrentStats) *trackerManager {
 	chans := new(trackerPeerChans)
 	chans.peers = make(chan PeerTuple)
-	chans.stats = make(chan Stats)
-	return &trackerManager{peerChans: *chans, port: port}
+	chans.stats = make(chan CurrentStats)
+	return &trackerManager{peerChans: *chans, port: port, statsCh: statsCh}
 }
 
 func (tm *trackerManager) Stop() error {
@@ -215,6 +218,8 @@ func (tm *trackerManager) Run(m MetaInfo, infoHash []byte) {
 
 	for {
 		select {
+		case <-tm.statsCh:
+			// TODO: Update tracker stats
 		case <-tm.t.Dying():
 			tr.Stop()
 			return

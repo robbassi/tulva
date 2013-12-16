@@ -18,7 +18,6 @@ type Torrent struct {
 	metaInfo MetaInfo
 	infoHash []byte
 	peer     chan PeerTuple
-	Stats    Stats
 	t        tomb.Tomb
 }
 
@@ -97,19 +96,6 @@ func ParseTorrentFile(filename string) (torrent Torrent, err error) {
 	return
 }
 
-// Init completes the initalization of the Torrent structure
-func (t *Torrent) Init() {
-	// Initialize bytes left to download
-	if len(t.metaInfo.Info.Files) > 0 {
-		for _, file := range t.metaInfo.Info.Files {
-			t.Stats.Left += file.Length
-		}
-	} else {
-		t.Stats.Left = t.metaInfo.Info.Length
-	}
-	// TODO: Read in the file and adjust bytes left
-}
-
 // Stop stops this Torrent session
 func (t *Torrent) Stop() error {
 	log.Println("Torrent : Stop : Stopping")
@@ -122,7 +108,6 @@ func (t *Torrent) Run() {
 	log.Println("Torrent : Run : Started")
 	defer t.t.Done()
 	defer log.Println("Torrent : Run : Completed")
-	t.Init()
 
 	pieceHashes := make([][]byte, 0)
 	for offset := 0; offset <= len(t.metaInfo.Info.Pieces)-20; offset += 20 {
@@ -152,10 +137,10 @@ func (t *Torrent) Run() {
 	log.Printf("Torrent : Run : The torrent contains %d file(s), which are split across %d pieces", numFiles, (len(t.metaInfo.Info.Pieces) / 20))
 	log.Printf("Torrent : Run : The total length of all file(s) is %d", totalLength)
 
-	dashboard := NewDashboard()
-	server := NewServer()
 	stats := NewStats()
-	trackerManager := NewTrackerManager(server.Port)
+	server := NewServer()
+	dashboard := NewDashboard(stats.dashboardCh)
+	trackerManager := NewTrackerManager(server.Port, stats.trackerCh)
 	peerManager := NewPeerManager(t.infoHash, len(pieceHashes), t.metaInfo.Info.PieceLength, totalLength, diskIO.peerChans, server.peerChans, stats.peerCh, trackerManager.peerChans)
 	controller := NewController(pieces, pieceHashes, diskIO.contChans, peerManager.contChans, peerManager.peerContChans, dashboard.pieceChan)
 

@@ -5,32 +5,47 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"time"
 )
 
-type Stats struct {
-	Left       int
-	Uploaded   int
-	Downloaded int
-	Errors     int
-	peerCh     chan PeerStats
-	ticker     <-chan time.Time
+type StatsCollector struct {
+	Left          int
+	Uploaded      int
+	Downloaded    int
+	Errors        int
+	lastUploads   []int
+	lastDownloads []int
+	peerCh        chan PeerStats
+	trackerCh     chan CurrentStats
+	dashboardCh   chan CurrentStats
+	ticker        <-chan time.Time
 }
 
-func NewStats() *Stats {
-	return &Stats{
-		peerCh: make(chan PeerStats),
-		ticker: make(chan time.Time),
+type CurrentStats struct {
+	UploadRate   float64
+	DownloadRate float64
+	Uploaded     int
+	Downloaded   int
+}
+
+func NewStats() *StatsCollector {
+	return &StatsCollector{
+		peerCh:        make(chan PeerStats),
+		ticker:        make(chan time.Time),
+		lastUploads:   make([]int, 5),
+		lastDownloads: make([]int, 5),
+		trackerCh:     make(chan CurrentStats),
+		dashboardCh:   make(chan CurrentStats),
 	}
 }
 
-func (s *Stats) Run() {
-	log.Println("Stats : Run : Started")
-	defer log.Println("Stats : Run : Stopped")
+func (s *StatsCollector) Run() {
+	log.Println("StatsCollector : Run : Started")
+	defer log.Println("StatsCollector : Run : Stopped")
 
 	s.ticker = time.Tick(time.Second * 1)
+	i := 0
 
 	for {
 		select {
@@ -39,7 +54,25 @@ func (s *Stats) Run() {
 			s.Uploaded += stat.write
 			s.Errors += stat.errors
 		case <-s.ticker:
-			fmt.Printf("\033[31mDownloaded: %d, Uploaded: %d, Errors: %d\033[0m\n", s.Downloaded, s.Uploaded, s.Errors)
+			s.lastDownloads[i] = s.Downloaded
+			s.lastUploads[i] = s.Uploaded
+			total := 0
+			for _, octets := range s.lastDownloads {
+				total += octets
+			}
+			downloadRate := float64(total) / 5
+			total = 0
+			for _, octets := range s.lastUploads {
+				total += octets
+			}
+			uploadRate := float64(total) / 5
+			currentStats := CurrentStats{DownloadRate: downloadRate, UploadRate: uploadRate, Downloaded: s.Downloaded, Uploaded: s.Uploaded}
+			go func() { s.trackerCh <- currentStats }()
+			go func() { s.dashboardCh <- currentStats }()
+			i++
+			if i%5 == 0 {
+				i = 0
+			}
 		}
 	}
 }

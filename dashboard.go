@@ -24,20 +24,21 @@ type FinishedPieces struct {
 }
 
 type Dashboard struct {
-	pieces []ReceivedPiece
-	totalPieces int
-	pieceChan chan ReceivedPiece
-	//statsChan chan Stats
+	pieces        []ReceivedPiece
+	totalPieces   int
+	pieceChan     chan ReceivedPiece
+	statsCh       chan CurrentStats
 	websocketChan chan *websocket.Conn
-	websockets map[string]*websocket.Conn
+	websockets    map[string]*websocket.Conn
 }
 
-func NewDashboard() *Dashboard {
+func NewDashboard(statsCh chan CurrentStats) *Dashboard {
 	return &Dashboard{
-		pieces: make([]ReceivedPiece, 0),
-		pieceChan: make(chan ReceivedPiece),
+		pieces:        make([]ReceivedPiece, 0),
+		pieceChan:     make(chan ReceivedPiece),
 		websocketChan: make(chan *websocket.Conn),
-		websockets: make(map[string]*websocket.Conn),
+		websockets:    make(map[string]*websocket.Conn),
+		statsCh:       statsCh,
 	}
 }
 
@@ -53,8 +54,7 @@ func (ds *Dashboard) wsHandler(ws *websocket.Conn) {
 	ds.websocketChan <- ws
 	// FIXME: Do something else here?
 	for {
-		select {
-		}
+		select {}
 	}
 }
 
@@ -72,17 +72,19 @@ func (ds *Dashboard) Run() {
 	}()
 	for {
 		select {
-		case piece := <- ds.pieceChan:
+		case piece := <-ds.pieceChan:
 			fmt.Println(piece, len(ds.websockets))
 			var finishedPieces FinishedPieces
 			finishedPieces.FinishedPieces = append(finishedPieces.FinishedPieces, piece)
 			pieceUpdate := &PieceUpdate{Piece: finishedPieces}
 			// tell websockets we have a piece
-			for _, ws := range(ds.websockets) {
+			for _, ws := range ds.websockets {
 				go websocket.JSON.Send(ws, pieceUpdate)
 			}
-		case ws := <- ds.websocketChan:
+		case ws := <-ds.websocketChan:
 			ds.websockets[ws.Request().RemoteAddr] = ws
+		case stats := <-ds.statsCh:
+			fmt.Println(stats)
 		}
 	}
 }
