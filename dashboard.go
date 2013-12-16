@@ -6,7 +6,6 @@ package main
 
 import (
 	"code.google.com/p/go.net/websocket"
-	"fmt"
 	"log"
 	"net/http"
 )
@@ -21,6 +20,10 @@ type TotalPieces struct {
 
 type FinishedPieces struct {
 	FinishedPieces []ReceivedPiece
+}
+
+type StatsUpdate struct {
+	Stats interface{}
 }
 
 type Dashboard struct {
@@ -73,7 +76,6 @@ func (ds *Dashboard) Run() {
 	for {
 		select {
 		case piece := <-ds.pieceChan:
-			fmt.Println(piece, len(ds.websockets))
 			var finishedPieces FinishedPieces
 			finishedPieces.FinishedPieces = append(finishedPieces.FinishedPieces, piece)
 			pieceUpdate := &PieceUpdate{Piece: finishedPieces}
@@ -84,7 +86,10 @@ func (ds *Dashboard) Run() {
 		case ws := <-ds.websocketChan:
 			ds.websockets[ws.Request().RemoteAddr] = ws
 		case stats := <-ds.statsCh:
-			fmt.Println(stats)
+			statsUpdate := &StatsUpdate{Stats: stats}
+			for _, ws := range ds.websockets {
+				go websocket.JSON.Send(ws, statsUpdate)
+			}
 		}
 	}
 }
