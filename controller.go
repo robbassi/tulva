@@ -7,7 +7,6 @@ package main
 import (
 	"launchpad.net/tomb"
 	"log"
-	"os"
 	"sort"
 )
 
@@ -66,6 +65,7 @@ type Controller struct {
 	maxSimultaneousDownloadsPerPeer int
 	downloadComplete                bool
 	rxChans                         *ControllerRxChans
+	dashboardPieceChan              chan ReceivedPiece
 	t                               tomb.Tomb
 }
 
@@ -117,7 +117,7 @@ type ControllerRxChans struct {
 }
 
 func NewController(finishedPieces []bool, pieceHashes [][]byte, diskIOChans ControllerDiskIOChans,
-	peerManagerChans ControllerPeerManagerChans, peerChans PeerControllerChans) *Controller {
+	peerManagerChans ControllerPeerManagerChans, peerChans PeerControllerChans, dashboardPieceChan chan ReceivedPiece) *Controller {
 
 	cont := new(Controller)
 
@@ -135,6 +135,7 @@ func NewController(finishedPieces []bool, pieceHashes [][]byte, diskIOChans Cont
 	cont.peers = make(map[string]*PeerInfo)
 	cont.activeRequestsTotals = make([]int, len(finishedPieces))
 	cont.maxSimultaneousDownloadsPerPeer = 5 // only 2 pieces at a time
+	cont.dashboardPieceChan = dashboardPieceChan
 
 	cont.updateCompletedFlagIfFinished(true)
 
@@ -167,7 +168,6 @@ func (cont *Controller) updateCompletedFlagIfFinished(initializing bool) {
 	log.Println("**********************************************************************")
 	log.Println("")
 	log.Println("")
-	os.Exit(0)
 }
 
 func (cont *Controller) Stop() error {
@@ -216,28 +216,28 @@ func sendHaveToPeer(pieceNum int, outerChan chan chan HavePiece) {
 }
 
 func (cont *Controller) removePieceFromActiveRequests(piece ReceivedPiece) {
-	finishingPeer := cont.peers[piece.peerName]
-	if _, exists := finishingPeer.activeRequests[piece.pieceNum]; exists {
+	finishingPeer := cont.peers[piece.PeerName]
+	if _, exists := finishingPeer.activeRequests[piece.PieceNum]; exists {
 		// Remove this piece from the peer's activeRequests set
-		delete(finishingPeer.activeRequests, piece.pieceNum)
+		delete(finishingPeer.activeRequests, piece.PieceNum)
 
 		// Decrement activeRequestsTotals for this piece by one (one less peer is downloading it)
-		cont.activeRequestsTotals[piece.pieceNum]--
+		cont.activeRequestsTotals[piece.PieceNum]--
 
 		// Check every peer to see if they're also downloading this piece.
 		for peerName, peerInfo := range cont.peers {
-			if _, exists := peerInfo.activeRequests[piece.pieceNum]; exists {
+			if _, exists := peerInfo.activeRequests[piece.PieceNum]; exists {
 				// This peer was also working on the same piece
-				log.Printf("Controller : removePieceFromActiveRequests : %s was also working on piece %x which is finished. Sending a CANCEL", peerName, piece.pieceNum)
+				log.Printf("Controller : removePieceFromActiveRequests : %s was also working on piece %x which is finished. Sending a CANCEL", peerName, piece.PieceNum)
 
 				// Remove this piece from the peer's activeRequests set
-				delete(peerInfo.activeRequests, piece.pieceNum)
+				delete(peerInfo.activeRequests, piece.PieceNum)
 
 				// Decrement activeRequestsTotals for this piece by one (one less peer is downloading it)
-				cont.activeRequestsTotals[piece.pieceNum]--
+				cont.activeRequestsTotals[piece.PieceNum]--
 
 				cancelMessage := new(CancelPiece)
-				cancelMessage.pieceNum = piece.pieceNum
+				cancelMessage.pieceNum = piece.PieceNum
 
 				// Tell this peer to stop downloading this piece because it's already finished.
 				//go func() { peerInfo.chans.cancelPiece <- *cancelMessage }()
@@ -245,9 +245,9 @@ func (cont *Controller) removePieceFromActiveRequests(piece ReceivedPiece) {
 			}
 		}
 
-		stuckRequests := cont.activeRequestsTotals[piece.pieceNum]
+		stuckRequests := cont.activeRequestsTotals[piece.PieceNum]
 		if stuckRequests != 0 {
-			log.Fatalf("Controller : removePieceFromActiveRequests : Somehow there are %d stuck requests for piece %x", stuckRequests, piece.pieceNum)
+			log.Fatalf("Controller : removePieceFromActiveRequests : Somehow there are %d stuck requests for piece %x", stuckRequests, piece.PieceNum)
 		}
 
 	} else {
@@ -451,24 +451,24 @@ func (cont *Controller) Run() {
 		// === START OF MESSAGES FROM DISK_IO ===
 		case piece := <-cont.rxChans.diskIO.receivedPiece:
 
-			_, exists := cont.peers[piece.peerName]
+			_, exists := cont.peers[piece.PeerName]
 
 			if !exists {
-				log.Printf("Controller : Run (Received Piece) : WARNING. Was notified that %s finished downloading piece %x, but it doesn't currently exist in the peers mapping.", piece.peerName, piece.pieceNum)
-			} else if !cont.peers[piece.peerName].isChoked {
+				log.Printf("Controller : Run (Received Piece) : WARNING. Was notified that %s finished downloading piece %x, but it doesn't currently exist in the peers mapping.", piece.PeerName, piece.PieceNum)
+			} else if !cont.peers[piece.PeerName].isChoked {
 				//log.Printf("Controller : Run (Received Piece) : %s finished downloading piece %x", piece.peerName, piece.pieceNum)
 			} else {
-				log.Printf("Controller : Run (Received Piece) : WARNING. Was notified that %s finished downloading piece %x but it's currently choked.", piece.peerName, piece.pieceNum)
+				log.Printf("Controller : Run (Received Piece) : WARNING. Was notified that %s finished downloading piece %x but it's currently choked.", piece.PeerName, piece.PieceNum)
 			}
 
 			// Update our bitfield to show that we now have that piece
-			cont.finishedPieces[piece.pieceNum] = true
+			cont.finishedPieces[piece.PieceNum] = true
 
 			// If this is the last piece that we needed, update the complete flag.
 			cont.updateCompletedFlagIfFinished(false)
 
 			// For every peer that doesn't already have this piece, send them a HAVE message
-			cont.sendHaveToPeersWhoNeedPiece(piece.pieceNum)
+			cont.sendHaveToPeersWhoNeedPiece(piece.PieceNum)
 
 			// Remove this piece from the active request list for the peer that
 			// finished the download, along with all other peers who were downloading
@@ -497,6 +497,9 @@ func (cont *Controller) Run() {
 					cont.sendRequestsToPeer(peerInfo, raritySlice)
 				}
 			}
+
+			// Tell dashboard that we've finished this piece
+			go func() { cont.dashboardPieceChan <- piece }()
 		// === END OF MESSAGES FROM DISK_IO ===
 
 		// === START OF MESSAGES FROM PEER_MANAGER ===

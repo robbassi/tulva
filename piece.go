@@ -50,6 +50,6 @@ type CancelPiece struct {
 // Sent from DiskIO to the controller indicating that a piece has been
 // received and written to disk
 type ReceivedPiece struct {
-	pieceNum int
-	peerName string
+	PieceNum int
+	PeerName string
 }

@@ -278,7 +278,7 @@ func (diskio *DiskIO) Run() {
 		case piece := <-diskio.peerChans.writePiece:
 			go func() {
 				diskio.writePiece(piece)
-				diskio.contChans.receivedPiece <- ReceivedPiece{pieceNum: piece.index, peerName: piece.peerName}
+				diskio.contChans.receivedPiece <- ReceivedPiece{PieceNum: piece.index, PeerName: piece.peerName}
 			}()
 		case blockRequest := <-diskio.peerChans.blockRequest:
 			log.Println("Received block request:", blockRequest)

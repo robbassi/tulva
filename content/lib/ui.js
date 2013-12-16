@@ -2,7 +2,11 @@ var socket = new WebSocket("ws://localhost:8080/ws", "protocolOne");
 socket.onmessage = function(msg) {
 	console.log(msg.data);
 };
+socket.onclose = function() {
+	console.log("Closed damn it!")
+};
 
+/*
 var w = 800;
 var h = 600;
 var force = d3.layout.force()
@@ -14,6 +18,7 @@ var force = d3.layout.force()
 var svg = d3.select("body").append("svg")
 	.attr("width", w)
     .attr("height", h);
+*/
 
 
 /*
