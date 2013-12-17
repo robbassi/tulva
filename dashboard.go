@@ -10,6 +10,33 @@ import (
 	"net/http"
 )
 
+type ChannelUpdate struct {
+	Channel interface{}
+}
+
+type AddNodes struct {
+	AddNodes []string
+}
+
+type RemoveNodes struct {
+	RemoveNodes []string
+}
+
+type AddEdges struct {
+	AddEdges []Edge
+}
+
+type UpdateEdges struct {
+	UpdateEdges []Edge
+}
+
+type Edge struct {
+	SourceNode string
+	TargetNode string
+	Name string
+	Intensity int  // an intensity scale from 1 to 100
+}
+
 type PieceUpdate struct {
 	Piece interface{}
 }
