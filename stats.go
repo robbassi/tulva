@@ -29,7 +29,10 @@ type CurrentStats struct {
 	Downloaded   int
 }
 
-func NewStats() *StatsCollector {
+func NewStats(graphCh chan GraphStateChange) *StatsCollector {
+	go func() {
+		graphCh <- *AddNodeMessage("stats")
+	}()
 	return &StatsCollector{
 		peerCh:        make(chan PeerStats),
 		ticker:        make(chan time.Time),
