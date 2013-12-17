@@ -137,9 +137,11 @@ func (t *Torrent) Run() {
 	log.Printf("Torrent : Run : The torrent contains %d file(s), which are split across %d pieces", numFiles, (len(t.metaInfo.Info.Pieces) / 20))
 	log.Printf("Torrent : Run : The total length of all file(s) is %d", totalLength)
 
-	stats := NewStats()
+	graphCh := make(chan GraphStateChange)
+
+	stats := NewStats(graphCh)
 	server := NewServer()
-	dashboard := NewDashboard(stats.dashboardCh,len(pieceHashes))
+	dashboard := NewDashboard(stats.dashboardCh, graphCh, len(pieceHashes))
 	trackerManager := NewTrackerManager(server.Port, stats.trackerCh)
 	peerManager := NewPeerManager(t.infoHash, len(pieceHashes), t.metaInfo.Info.PieceLength, totalLength, diskIO.peerChans, server.peerChans, stats.peerCh, trackerManager.peerChans)
 	controller := NewController(pieces, pieceHashes, diskIO.contChans, peerManager.contChans, peerManager.peerContChans, dashboard.pieceChan)
