@@ -10,6 +10,33 @@ import (
 	"net/http"
 )
 
+type ChannelUpdate struct {
+	Channel interface{}
+}
+
+type AddNodes struct {
+	AddNodes []string
+}
+
+type RemoveNodes struct {
+	RemoveNodes []string
+}
+
+type AddEdges struct {
+	AddEdges []Edge
+}
+
+type UpdateEdges struct {
+	UpdateEdges []Edge
+}
+
+type Edge struct {
+	SourceNode string
+	TargetNode string
+	Name string
+	Intensity int  // an intensity scale from 1 to 100
+}
+
 type PieceUpdate struct {
 	Piece interface{}
 }
@@ -29,30 +56,27 @@ type StatsUpdate struct {
 type Dashboard struct {
 	pieces        []ReceivedPiece
 	totalPieces   int
-	pieceChan     chan ReceivedPiece
+	pieceChan     chan chan ReceivedPiece
 	statsCh       chan CurrentStats
 	websocketChan chan *websocket.Conn
 	websockets    map[string]*websocket.Conn
+	finishedPieces FinishedPieces
 }
 
-func NewDashboard(statsCh chan CurrentStats) *Dashboard {
+func NewDashboard(statsCh chan CurrentStats, totalPieces int) *Dashboard {
 	return &Dashboard{
 		pieces:        make([]ReceivedPiece, 0),
-		pieceChan:     make(chan ReceivedPiece),
+		pieceChan:     make(chan chan ReceivedPiece),
 		websocketChan: make(chan *websocket.Conn),
 		websockets:    make(map[string]*websocket.Conn),
 		statsCh:       statsCh,
+		totalPieces:   totalPieces,
 	}
 }
 
 func (ds *Dashboard) wsHandler(ws *websocket.Conn) {
 	log.Printf("New websocket connection: %#v", ws.Config)
 	// init and send the list of pieces
-
-	var totalPieces TotalPieces
-	totalPieces.TotalPieces = ds.totalPieces
-	pieceUpdate := &PieceUpdate{Piece: totalPieces}
-	websocket.JSON.Send(ws, pieceUpdate)
 
 	ds.websocketChan <- ws
 	// FIXME: Do something else here?
@@ -75,20 +99,34 @@ func (ds *Dashboard) Run() {
 	}()
 	for {
 		select {
-		case piece := <-ds.pieceChan:
-			var finishedPieces FinishedPieces
-			finishedPieces.FinishedPieces = append(finishedPieces.FinishedPieces, piece)
-			pieceUpdate := &PieceUpdate{Piece: finishedPieces}
+		case innerChan := <-ds.pieceChan:
+
+			justFinished := make([]ReceivedPiece,0)
+			for piece := range innerChan {
+				justFinished = append(justFinished, piece)
+			}
+			log.Println("Dashboard : Run : Received %d finished pieces from controller.", len(justFinished))
+
+			ds.finishedPieces.FinishedPieces = append(ds.finishedPieces.FinishedPieces, justFinished...)
+			pieceUpdate := &PieceUpdate{Piece: &FinishedPieces{FinishedPieces: justFinished}}
 			// tell websockets we have a piece
 			for _, ws := range ds.websockets {
-				go websocket.JSON.Send(ws, pieceUpdate)
+				websocket.JSON.Send(ws, pieceUpdate)
 			}
 		case ws := <-ds.websocketChan:
 			ds.websockets[ws.Request().RemoteAddr] = ws
+			var totalPieces TotalPieces
+			totalPieces.TotalPieces = ds.totalPieces
+			pieceTotal := &PieceUpdate{Piece: totalPieces}
+			websocket.JSON.Send(ws, pieceTotal)
+
+			pieceUpdate := &PieceUpdate{Piece: ds.finishedPieces}
+			websocket.JSON.Send(ws, pieceUpdate)
+
 		case stats := <-ds.statsCh:
 			statsUpdate := &StatsUpdate{Stats: stats}
 			for _, ws := range ds.websockets {
-				go websocket.JSON.Send(ws, statsUpdate)
+				websocket.JSON.Send(ws, statsUpdate)
 			}
 		}
 	}

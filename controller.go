@@ -79,7 +79,7 @@ type Controller struct {
 	maxSimultaneousDownloadsPerPeer int
 	downloadComplete                bool
 	rxChans                         *ControllerRxChans
-	dashboardPieceChan              chan ReceivedPiece
+	dashboardPieceChan              chan chan ReceivedPiece
 	t                               tomb.Tomb
 }
 
@@ -131,7 +131,7 @@ type ControllerRxChans struct {
 }
 
 func NewController(finishedPieces []bool, pieceHashes [][]byte, diskIOChans ControllerDiskIOChans,
-	peerManagerChans ControllerPeerManagerChans, peerChans PeerControllerChans, dashboardPieceChan chan ReceivedPiece) *Controller {
+	peerManagerChans ControllerPeerManagerChans, peerChans PeerControllerChans, dashboardPieceChan chan chan ReceivedPiece) *Controller {
 
 	cont := new(Controller)
 
@@ -441,10 +441,24 @@ func (cont *Controller) removeUnfinishedWorkForPeer(peerInfo *PeerInfo) {
 	peerInfo.activeRequests = make(map[int]struct{})
 }
 
+func (cont *Controller) sendPreviouslyFinishedPiecesToDashboard() {
+	innerChan := make(chan ReceivedPiece)
+	cont.dashboardPieceChan <- innerChan
+	for i, hasPiece := range cont.finishedPieces {
+		if hasPiece {
+			innerChan <- ReceivedPiece{PieceNum: i, PeerName: "Previously Finished"}
+		}
+	}
+	close(innerChan)
+}
+
 func (cont *Controller) Run() {
 	log.Println("Controller : Run : Started")
 	defer cont.t.Done()
 	defer log.Println("Controller : Run : Completed")
+
+	// Send the pieces that were previously finished
+	go cont.sendPreviouslyFinishedPiecesToDashboard();
 
 	for {
 		select {
@@ -500,7 +514,12 @@ func (cont *Controller) Run() {
 			}
 
 			// Tell dashboard that we've finished this piece
-			go func() { cont.dashboardPieceChan <- piece }()
+			go func() { 
+				innerChan := make(chan ReceivedPiece)
+				cont.dashboardPieceChan <- innerChan
+				innerChan <- piece
+				close(innerChan)
+			}()
 		// === END OF MESSAGES FROM DISK_IO ===
 
 		// === START OF MESSAGES FROM PEER_MANAGER ===
