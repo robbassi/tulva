@@ -16,7 +16,7 @@ type DiGraphUpdate struct {
 }
 
 type AddNodes struct {
-	AddNodes []string
+	AddNodes []Node
 }
 
 type RemoveNodes struct {
@@ -42,6 +42,11 @@ type Edge struct {
 	Intensity int  // an intensity scale from 1 to 100
 }
 
+type Node struct {
+	NodeName string
+	NodeID string
+}
+
 type PieceUpdate struct {
 	Piece interface{}
 }
@@ -60,13 +65,13 @@ type StatsUpdate struct {
 
 // Used to store the entire state of the graph
 type DirectedGraph struct {
-	Nodes map[string]struct{}
+	Nodes map[string]Node  // nodeName to node
 	Edges map[string]Edge  // edge-id to edge, where the edge-id is SourceNode-TargetNode-Name
 }
 
 func NewDirectedGraph() *DirectedGraph {
 	dg := new(DirectedGraph)
-	dg.Nodes = make(map[string]struct{})
+	dg.Nodes = make(map[string]Node)
 	dg.Edges = make(map[string]Edge)
 	return dg
 }
@@ -81,21 +86,21 @@ const (
 
 type GraphStateChange struct {
 	Operation int // Either AddNode, RemoveNode, AddEdge, UpdateEdge or RemoveEdge
-	Node    string // Is nil is Edge is set
+	Node    Node // Is nil is Edge is set
 	Edge 	Edge // Is nil is Node is set
 }
 
-func AddNodeMessage(node string) GraphStateChange {
+func AddNodeMessage(nodeName string, nodeID string) GraphStateChange {
 	gsc := new(GraphStateChange)
 	gsc.Operation = AddNode
-	gsc.Node = node
+	gsc.Node = Node{NodeName: nodeName, NodeID: nodeID}
 	return *gsc
 }
 
-func RemoveNodeMessage(node string) GraphStateChange {
+func RemoveNodeMessage(nodeName string) GraphStateChange {
 	gsc := new(GraphStateChange)
 	gsc.Operation = RemoveNode
-	gsc.Node = node
+	gsc.Node = Node{NodeName: nodeName}
 	return *gsc
 }
 
@@ -210,13 +215,15 @@ func (ds *Dashboard) Run() {
 			for piece := range innerChan {
 				justFinished = append(justFinished, piece)
 			}
-			log.Println("Dashboard : Run : Received %d finished pieces from controller.", len(justFinished))
+			log.Printf("Dashboard : Run : Received %d finished pieces from controller.", len(justFinished))
 
-			ds.finishedPieces.FinishedPieces = append(ds.finishedPieces.FinishedPieces, justFinished...)
-			pieceUpdate := &PieceUpdate{Piece: &FinishedPieces{FinishedPieces: justFinished}}
-			// tell websockets we have a piece
-			for _, ws := range ds.websockets {
-				websocket.JSON.Send(ws, pieceUpdate)
+			if (len(justFinished)) > 0 {
+				ds.finishedPieces.FinishedPieces = append(ds.finishedPieces.FinishedPieces, justFinished...)
+				pieceUpdate := &PieceUpdate{Piece: &FinishedPieces{FinishedPieces: justFinished}}
+				// tell websockets we have a piece
+				for _, ws := range ds.websockets {
+					websocket.JSON.Send(ws, pieceUpdate)
+				}
 			}
 		case ws := <-ds.websocketChan:
 			ds.websockets[ws.Request().RemoteAddr] = ws
@@ -225,12 +232,14 @@ func (ds *Dashboard) Run() {
 			pieceTotal := &PieceUpdate{Piece: totalPieces}
 			websocket.JSON.Send(ws, pieceTotal)
 
-			pieceUpdate := &PieceUpdate{Piece: ds.finishedPieces}
-			websocket.JSON.Send(ws, pieceUpdate)
+			if len(ds.finishedPieces.FinishedPieces) > 0 {
+				pieceUpdate := &PieceUpdate{Piece: ds.finishedPieces}
+				websocket.JSON.Send(ws, pieceUpdate)
+			}
 
-			nodes := make([]string, 0)
-			for nodeName := range ds.directedGraph.Nodes {
-				nodes = append(nodes, nodeName)
+			nodes := make([]Node, 0)
+			for _, node := range ds.directedGraph.Nodes {
+				nodes = append(nodes, node)
 			}
 
 			nodeUpdate := DiGraphUpdate{DiGraph: AddNodes{AddNodes:nodes}}
@@ -255,16 +264,16 @@ func (ds *Dashboard) Run() {
 
 			switch graphChange.Operation {
 			case AddNode:
-				node := graphChange.Node
-				_, exists := ds.directedGraph.Nodes[node]
+				nodeName := graphChange.Node.NodeName
+				_, exists := ds.directedGraph.Nodes[nodeName]
 				if exists {
-					log.Fatalf("Dashboard : Run : Attempted to add node %s, but it already exists in the graph", node)
+					log.Fatalf("Dashboard : Run : Attempted to add node %s, but it already exists in the graph", nodeName)
 				} else {
-					log.Printf("Dashboard : Run : Adding node %s to the graph", node)
+					log.Printf("Dashboard : Run : Adding node %s to the graph", nodeName)
 				}
 
 				an := new(AddNodes)
-				an.AddNodes = []string{node}
+				an.AddNodes = []Node{graphChange.Node}
 
 				gu := new(DiGraphUpdate)
 				gu.DiGraph = an
@@ -273,28 +282,28 @@ func (ds *Dashboard) Run() {
 					websocket.JSON.Send(ws, gu)
 				}
 
-				ds.directedGraph.Nodes[node] = struct{}{}
+				ds.directedGraph.Nodes[nodeName] = graphChange.Node
 
 
 			case RemoveNode:
-				node := graphChange.Node
-				_, exists := ds.directedGraph.Nodes[node]
+				nodeName := graphChange.Node.NodeName
+				_, exists := ds.directedGraph.Nodes[nodeName]
 				if !exists {
-					log.Fatalf("Dashboard : Run : Attempted to remove node %s, but it doesn't exist in the graph", node)
+					log.Fatalf("Dashboard : Run : Attempted to remove node %s, but it doesn't exist in the graph", nodeName)
 				} else {
-					log.Printf("Dashboard : Run : Removing node %s from the graph", node)
+					log.Printf("Dashboard : Run : Removing node %s from the graph", nodeName)
 				}
 
 				// Check to see if there are any edges linked to this graph. 
 				for edgeId, edge := range ds.directedGraph.Edges {
-					if edge.SourceNode == node || edge.TargetNode == node {
-						log.Printf("Dashboard : Run : Edge %s must be removed because it depends on %s", edgeId, node)
+					if edge.SourceNode == nodeName || edge.TargetNode == nodeName {
+						log.Printf("Dashboard : Run : Edge %s must be removed because it depends on %s", edgeId, nodeName)
 						ds.removeEdge(edgeId)
 					}
 				}
 
 				rn := new(RemoveNodes)
-				rn.RemoveNodes = []string{node}
+				rn.RemoveNodes = []string{nodeName}
 
 				gu := new(DiGraphUpdate)
 				gu.DiGraph = rn
@@ -303,7 +312,7 @@ func (ds *Dashboard) Run() {
 					websocket.JSON.Send(ws, gu)
 				}
 
-				delete(ds.directedGraph.Nodes, node)
+				delete(ds.directedGraph.Nodes, nodeName)
 
 
 			case AddEdge:
