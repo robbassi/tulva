@@ -35,6 +35,7 @@ type trackerManager struct {
 	peerChans trackerPeerChans
 	port      uint16
 	statsCh   chan CurrentStats
+	graphCh   chan GraphStateChange
 	t         tomb.Tomb
 }
 
@@ -56,6 +57,7 @@ type tracker struct {
 	response    TrackerResponse
 	peerChans   trackerPeerChans
 	completedCh chan bool
+	graphCh     chan GraphStateChange
 	timer       <-chan time.Time
 	stats       CurrentStats
 	key         string
@@ -170,7 +172,7 @@ func (tr *tracker) Run() {
 	}
 }
 
-func newTracker(key string, chans trackerPeerChans, port uint16, infoHash []byte, announce string) *tracker {
+func newTracker(key string, chans trackerPeerChans, port uint16, infoHash []byte, announce string, graphCh chan GraphStateChange) *tracker {
 	announceURL, err := url.Parse(announce)
 	if err != nil {
 		log.Fatal(err)
@@ -180,15 +182,23 @@ func newTracker(key string, chans trackerPeerChans, port uint16, infoHash []byte
 	}
 	tracker := &tracker{key: key, peerChans: chans, port: port, infoHash: infoHash, announceURL: announceURL}
 	tracker.infoHash = make([]byte, len(infoHash))
+	tracker.graphCh = graphCh
+	go func() {
+		graphCh <- AddNodeMessage("Tracker")
+		graphCh <- AddEdgeMessage("Tracker", "PeerManager", "Peer", 100)
+	}()
 	copy(tracker.infoHash, infoHash)
 	return tracker
 }
 
-func NewTrackerManager(port uint16, statsCh chan CurrentStats) *trackerManager {
+func NewTrackerManager(port uint16, statsCh chan CurrentStats, graphCh chan GraphStateChange) *trackerManager {
 	chans := new(trackerPeerChans)
 	chans.peers = make(chan PeerTuple)
 	chans.stats = make(chan CurrentStats)
-	return &trackerManager{peerChans: *chans, port: port, statsCh: statsCh}
+	go func() {
+		graphCh <- AddNodeMessage("TrackerManager")
+	}()
+	return &trackerManager{peerChans: *chans, port: port, statsCh: statsCh, graphCh: graphCh}
 }
 
 func (tm *trackerManager) Stop() error {
@@ -213,7 +223,7 @@ func (tm *trackerManager) Run(m MetaInfo, infoHash []byte) {
 		}
 	*/
 
-	tr := newTracker(initKey(), tm.peerChans, tm.port, infoHash, m.Announce)
+	tr := newTracker(initKey(), tm.peerChans, tm.port, infoHash, m.Announce, tm.graphCh)
 	go tr.Run()
 
 	for {

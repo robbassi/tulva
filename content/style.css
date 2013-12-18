@@ -1,4 +1,4 @@
-.graph {
+.digraph {
 	float: left;
 	height: 600px;
 	width: 70%;
@@ -24,4 +24,19 @@
 #progress {
 	height: 200px;
 	width: 100%;
+}
+path.link {
+  fill: none;
+  stroke: #666;
+  stroke-width: 1.5px;
+}
+circle {
+  fill: #ccc;
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+text {
+  fill: #000;
+  font: 10px sans-serif;
+  pointer-events: none;
 }

@@ -26,6 +26,7 @@ type DiskIO struct {
 	files     []*os.File
 	peerChans diskIOPeerChans
 	contChans ControllerDiskIOChans
+	graphCh   chan GraphStateChange   
 	t         tomb.Tomb
 }
 
@@ -140,12 +141,16 @@ func openOrCreateFile(name string) (file *os.File) {
 	return
 }
 
-func NewDiskIO(metaInfo MetaInfo) *DiskIO {
+func NewDiskIO(metaInfo MetaInfo, graphCh chan GraphStateChange) *DiskIO {
 	diskio := new(DiskIO)
 	diskio.metaInfo = metaInfo
 	diskio.peerChans.writePiece = make(chan Piece)
 	diskio.peerChans.blockRequest = make(chan BlockRequest)
 	diskio.contChans.receivedPiece = make(chan ReceivedPiece)
+	diskio.graphCh = graphCh
+	go func() {
+		graphCh <- AddNodeMessage("DiskIO")
+	}()
 	return diskio
 }
 

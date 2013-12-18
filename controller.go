@@ -80,6 +80,7 @@ type Controller struct {
 	downloadComplete                bool
 	rxChans                         *ControllerRxChans
 	dashboardPieceChan              chan chan ReceivedPiece
+	graphCh 						chan GraphStateChange
 	t                               tomb.Tomb
 }
 
@@ -131,7 +132,7 @@ type ControllerRxChans struct {
 }
 
 func NewController(finishedPieces []bool, pieceHashes [][]byte, diskIOChans ControllerDiskIOChans,
-	peerManagerChans ControllerPeerManagerChans, peerChans PeerControllerChans, dashboardPieceChan chan chan ReceivedPiece) *Controller {
+	peerManagerChans ControllerPeerManagerChans, peerChans PeerControllerChans, dashboardPieceChan chan chan ReceivedPiece, graphCh chan GraphStateChange) *Controller {
 
 	cont := new(Controller)
 
@@ -150,6 +151,12 @@ func NewController(finishedPieces []bool, pieceHashes [][]byte, diskIOChans Cont
 	cont.activeRequestsTotals = make([]int, len(finishedPieces))
 	cont.maxSimultaneousDownloadsPerPeer = 5 // only 5 pieces at a time
 	cont.dashboardPieceChan = dashboardPieceChan
+	cont.graphCh = graphCh
+	go func() {
+		graphCh <- AddNodeMessage("Controller")
+		graphCh <- AddEdgeMessage("PeerManager", "Controller", "NewPeers", 100)
+		graphCh <- AddEdgeMessage("DiskIO", "Controller", "ReceivedPiece", 100)
+	}()
 
 	cont.updateCompletedFlagIfFinished(true)
 

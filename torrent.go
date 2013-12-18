@@ -12,6 +12,7 @@ import (
 	"launchpad.net/tomb"
 	"log"
 	"os"
+	"time"
 )
 
 type Torrent struct {
@@ -114,7 +115,9 @@ func (t *Torrent) Run() {
 		pieceHashes = append(pieceHashes, []byte(t.metaInfo.Info.Pieces[offset:offset+20]))
 	}
 
-	diskIO := NewDiskIO(t.metaInfo)
+	graphCh := make(chan GraphStateChange)
+
+	diskIO := NewDiskIO(t.metaInfo, graphCh)
 	diskIO.Init()
 	pieces := diskIO.Verify()
 
@@ -137,21 +140,26 @@ func (t *Torrent) Run() {
 	log.Printf("Torrent : Run : The torrent contains %d file(s), which are split across %d pieces", numFiles, (len(t.metaInfo.Info.Pieces) / 20))
 	log.Printf("Torrent : Run : The total length of all file(s) is %d", totalLength)
 
-	graphCh := make(chan GraphStateChange)
-
-	stats := NewStats(graphCh)
-	server := NewServer()
+	stats := NewStats()
+	server := NewServer(graphCh)
 	dashboard := NewDashboard(stats.dashboardCh, graphCh, len(pieceHashes))
-	trackerManager := NewTrackerManager(server.Port, stats.trackerCh)
-	peerManager := NewPeerManager(t.infoHash, len(pieceHashes), t.metaInfo.Info.PieceLength, totalLength, diskIO.peerChans, server.peerChans, stats.peerCh, trackerManager.peerChans)
-	controller := NewController(pieces, pieceHashes, diskIO.contChans, peerManager.contChans, peerManager.peerContChans, dashboard.pieceChan)
-
 	go dashboard.Run()
+
+	// Sleep for 2 seconds so the initial graph setup can be seen
+	// on the client. 
+	time.Sleep(time.Second * 2)
+
+	trackerManager := NewTrackerManager(server.Port, stats.trackerCh, graphCh)
+	peerManager := NewPeerManager(t.infoHash, len(pieceHashes), t.metaInfo.Info.PieceLength, totalLength, diskIO.peerChans, server.peerChans, stats.peerCh, trackerManager.peerChans, graphCh)
+	controller := NewController(pieces, pieceHashes, diskIO.contChans, peerManager.contChans, peerManager.peerContChans, dashboard.pieceChan, graphCh)
+
+	
 	go controller.Run()
 	go stats.Run()
 	go peerManager.Run()
 	go server.Run()
 	go trackerManager.Run(t.metaInfo, t.infoHash)
+
 
 	for {
 		select {

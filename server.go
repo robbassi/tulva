@@ -18,14 +18,16 @@ type Server struct {
 	Port      uint16
 	Listener  *net.TCPListener
 	peerChans serverPeerChans
+	graphCh   chan GraphStateChange
 	t         tomb.Tomb
 }
 
-func NewServer() *Server {
+func NewServer(graphCh chan GraphStateChange) *Server {
 	sv := new(Server)
 
 	// Send any new connections we receive to PeerManager
 	sv.peerChans.conns = make(chan *net.TCPConn)
+	sv.graphCh = graphCh
 
 	var err error
 	sv.Listener, err = net.ListenTCP("tcp4", &net.TCPAddr{net.ParseIP("0.0.0.0"), 0, ""})
@@ -34,6 +36,10 @@ func NewServer() *Server {
 	}
 	sv.Port = uint16(sv.Listener.Addr().(*net.TCPAddr).Port)
 	log.Println("Server : Listening on port", sv.Port)
+
+	go func() {
+		graphCh <- AddNodeMessage("Server")
+	}()
 
 	return sv
 }

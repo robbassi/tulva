@@ -1,16 +1,33 @@
 var socket = new WebSocket("ws://localhost:8080/ws", "protocolOne");
 
+initializeDiGraph()
+
+socket.onopen = function() {
+	console.log("SOCKET OPENED")
+}
+
 var data = [[5, 12], [2, 9], [3,4]]
 socket.onmessage = function(msg) {
+	console.log(msg.data)
 	var json = JSON.parse(msg.data);
 	if (json.Stats) {
 		//updateStats(json);
+	} else if (json.DiGraph) {
+		console.log("Received DiGraph data")
+		handleDiGraphMessage(json.DiGraph)
+	} else if (json.Progress) {
+		console.log("Received Progress data")
+		handleProgressMessage(json.Progress)
+	} else if (json.Piece) {
+		console.log("Received Piece data")
+		handlePieceMessage(json.Piece)
 	} else {
+		console.log("Received JSON of unknown type")
 		console.log(json);
 	}
 };
 socket.onclose = function() {
-	console.log("Closed damn it!")
+	console.log("SOCKET CLOSED")
 };
 
 /*

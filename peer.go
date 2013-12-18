@@ -63,6 +63,7 @@ type Peer struct {
 	infoHash         []byte
 	pieceLength      int
 	sendChan         chan []byte
+	receiveChan      chan []byte
 	totalLength      int
 	downloads        []*PieceDownload
 	diskIOChans      diskIOPeerChans
@@ -72,6 +73,7 @@ type Peer struct {
 	contTxChans      PeerControllerChans
 	stats            PeerStats
 	statsCh          chan PeerStats
+	graphCh			 chan GraphStateChange
 	t                tomb.Tomb
 }
 
@@ -138,6 +140,7 @@ type PeerManager struct {
 	contChans     ControllerPeerManagerChans
 	peerContChans PeerControllerChans
 	statsCh       chan PeerStats
+	graphCh 	  chan GraphStateChange
 	t             tomb.Tomb
 }
 
@@ -221,7 +224,7 @@ func sortedPeersByQtyPiecesNeeded(peers map[string]*PeerInfo) SortedPeers {
 	return peerInfoSlice
 }
 
-func NewPeerManager(infoHash []byte, numPieces int, pieceLength int, totalLength int, diskIOChans diskIOPeerChans, serverChans serverPeerChans, statsCh chan PeerStats, trackerChans trackerPeerChans) *PeerManager {
+func NewPeerManager(infoHash []byte, numPieces int, pieceLength int, totalLength int, diskIOChans diskIOPeerChans, serverChans serverPeerChans, statsCh chan PeerStats, trackerChans trackerPeerChans, graphCh chan GraphStateChange) *PeerManager {
 	pm := new(PeerManager)
 	pm.infoHash = infoHash
 	pm.numPieces = numPieces
@@ -239,6 +242,12 @@ func NewPeerManager(infoHash []byte, numPieces int, pieceLength int, totalLength
 	pm.contChans.seeding = make(chan bool)
 	pm.peerContChans.chokeStatus = make(chan PeerChokeStatus)
 	pm.peerContChans.havePiece = make(chan chan HavePiece)
+	pm.graphCh = graphCh
+	go func() {
+		graphCh <- AddNodeMessage("PeerManager")
+		graphCh <- AddEdgeMessage("Server", "PeerManager", "Peer", 100)
+	}()
+
 	return pm
 }
 
@@ -264,7 +273,8 @@ func NewPeer(
 	contRxChans ControllerPeerChans,
 	contTxChans PeerControllerChans,
 	peerManagerChans peerManagerChans,
-	statsCh chan PeerStats) *Peer {
+	statsCh chan PeerStats,
+	graphCh chan GraphStateChange) *Peer {
 	p := &Peer{
 		peerName:         peerName,
 		infoHash:         infoHash,
@@ -280,13 +290,20 @@ func NewPeer(
 		peerChoking:      true,
 		peerInterested:   false,
 		sendChan:         make(chan []byte),
+		receiveChan:  	  make(chan []byte),
 		diskIOChans:      diskIOChans,
 		blockResponse:    make(chan BlockResponse),
 		contRxChans:      contRxChans,
 		contTxChans:      contTxChans,
 		peerManagerChans: peerManagerChans,
 		statsCh:          statsCh,
+		graphCh: 		  graphCh,
 		downloads:        make([]*PieceDownload, 0)}
+	go func() {
+		graphCh <- AddNodeMessage(peerName)
+		graphCh <- AddEdgeMessage(peerName, "DiskIO", "Piece", 100)
+		graphCh <- AddEdgeMessage("Controller", peerName, "Request", 100)
+	}()
 	return p
 }
 
@@ -645,6 +662,11 @@ func (p *Peer) reader() {
 	log.Printf("Peer (%s) : reader : Started", p.peerName)
 	defer log.Printf("Peer (%s) : reader : Completed", p.peerName)
 
+	go func() {
+		p.graphCh <- AddNodeMessage(p.peerName + "(R)")
+		p.graphCh <- AddEdgeMessage(p.peerName + "(R)", p.peerName, "Read", 100)
+	}()
+
 	var handshake Handshake
 	err := binary.Read(p.conn, binary.BigEndian, &handshake)
 	if err != nil {
@@ -685,9 +707,14 @@ func (p *Peer) reader() {
 		p.lastRxMessage = time.Now()
 		p.stats.addRead(n)
 
-		//log.Printf("Peer (%s) read %d bytes", p.peerName, n + 4)
-		go p.decodeMessage(payload)
+		log.Printf("Peer (%s) read %d bytes", p.peerName, n + 4)
+		go p.queueReceivedPayload(payload)
+		//go p.decodeMessage(payload)
 	}
+}
+
+func (p *Peer) queueReceivedPayload(payload []byte) {
+	p.receiveChan <- payload
 }
 
 func (p *Peer) sendHandshake() {
@@ -731,6 +758,11 @@ func (p *Peer) sendKeepalive() {
 func (p *Peer) writer() {
 	log.Println("Peer : writer : Started:", p.peerName)
 	defer log.Println("Peer : writer : Completed:", p.peerName)
+
+	go func() {
+		p.graphCh <- AddNodeMessage(p.peerName + "(W)")
+		p.graphCh <- AddEdgeMessage(p.peerName, p.peerName + "(W)", "Write", 100)
+	}()
 
 	for {
 		select {
@@ -989,6 +1021,11 @@ func (p *Peer) updateOurBitfield(havePieces []HavePiece) {
 
 func (p *Peer) Stop() error {
 	log.Println("Peer : Stop : Stopping:", p.peerName)
+	go func() {
+		p.graphCh <- RemoveNodeMessage(p.peerName)
+		p.graphCh <- RemoveNodeMessage(p.peerName + "(W)")
+		p.graphCh <- RemoveNodeMessage(p.peerName + "(R)")
+	}()
 	p.t.Kill(nil)
 	return p.t.Wait()
 }
@@ -1071,6 +1108,9 @@ func (p *Peer) Run() {
 			if p.amInterested && !p.weShouldBeInterested() {
 				p.sendNotInterested()
 			}
+
+		case payload := <-p.receiveChan:
+			go p.decodeMessage(payload)
 
 		case <-p.t.Dying():
 			p.conn.Close()
@@ -1156,7 +1196,8 @@ func (pm *PeerManager) Run() {
 					contTxChans,
 					pm.peerContChans,
 					pm.peerChans,
-					pm.statsCh)
+					pm.statsCh,
+					pm.graphCh)
 
 				// Give the controller the channels that it will use to
 				// transmit messages to this new peer

@@ -11,19 +11,12 @@ import (
 	"net/http"
 )
 
-type ChannelUpdate struct {
-	Channel interface{}
+type DiGraphUpdate struct {
+	DiGraph interface{}
 }
 
 type AddNodes struct {
 	AddNodes []string
-}
-
-func AddNodeMessage(node string) *GraphStateChange {
-	gsc := new(GraphStateChange)
-	gsc.Operation = AddNode
-	gsc.Node = node
-	return gsc
 }
 
 type RemoveNodes struct {
@@ -92,6 +85,60 @@ type GraphStateChange struct {
 	Edge 	Edge // Is nil is Node is set
 }
 
+func AddNodeMessage(node string) GraphStateChange {
+	gsc := new(GraphStateChange)
+	gsc.Operation = AddNode
+	gsc.Node = node
+	return *gsc
+}
+
+func RemoveNodeMessage(node string) GraphStateChange {
+	gsc := new(GraphStateChange)
+	gsc.Operation = RemoveNode
+	gsc.Node = node
+	return *gsc
+}
+
+func AddEdgeMessage(sourceNode string, targetNode string, name string, intensity int) GraphStateChange {
+	gsc := new(GraphStateChange)
+	gsc.Operation = AddEdge
+	gsc.Edge = Edge{
+		SourceNode: sourceNode,
+		TargetNode: targetNode,
+		Name: name,
+		Intensity: intensity,
+	}
+	return *gsc
+}
+
+func UpdateEdgeMessage(sourceNode string, targetNode string, name string, intensity int) GraphStateChange {
+	if intensity < 1 || intensity > 100 {
+		log.Fatalf("Edge intensity must be between 1 and 100")
+	}
+	gsc := new(GraphStateChange)
+	gsc.Operation = UpdateEdge
+	gsc.Edge = Edge{
+		SourceNode: sourceNode,
+		TargetNode: targetNode,
+		Name: name,
+		Intensity: intensity,
+	}
+	return *gsc
+}
+
+func RemoveEdgeMessage(sourceNode string, targetNode string, name string) GraphStateChange {
+	gsc := new(GraphStateChange)
+	gsc.Operation = RemoveEdge
+	gsc.Edge = Edge{
+		SourceNode: sourceNode,
+		TargetNode: targetNode,
+		Name: name,
+	}
+	return *gsc
+}
+
+
+
 type Dashboard struct {
 	pieces        []ReceivedPiece
 	totalPieces   int
@@ -133,11 +180,11 @@ func (ds *Dashboard) removeEdge(edgeId string) {
 	re := new(RemoveEdges)
 	re.RemoveEdges = []Edge{ds.directedGraph.Edges[edgeId]}
 
-	cu := new(ChannelUpdate)
-	cu.Channel = re
+	gu := new(DiGraphUpdate)
+	gu.DiGraph = re
 
 	for _, ws := range ds.websockets {
-		websocket.JSON.Send(ws, cu)
+		websocket.JSON.Send(ws, gu)
 	}
 
 	delete(ds.directedGraph.Edges, edgeId)
@@ -181,6 +228,23 @@ func (ds *Dashboard) Run() {
 			pieceUpdate := &PieceUpdate{Piece: ds.finishedPieces}
 			websocket.JSON.Send(ws, pieceUpdate)
 
+			nodes := make([]string, 0)
+			for nodeName := range ds.directedGraph.Nodes {
+				nodes = append(nodes, nodeName)
+			}
+
+			nodeUpdate := DiGraphUpdate{DiGraph: AddNodes{AddNodes:nodes}}
+			websocket.JSON.Send(ws, nodeUpdate)
+
+			edges := make([]Edge, 0)
+			for _, edge := range ds.directedGraph.Edges {
+				edges = append(edges, edge)
+			} 
+
+			edgeUpdate := DiGraphUpdate{DiGraph: AddEdges{AddEdges: edges}}
+			websocket.JSON.Send(ws, edgeUpdate)
+
+
 		case stats := <-ds.statsCh:
 			statsUpdate := &StatsUpdate{Stats: stats}
 			for _, ws := range ds.websockets {
@@ -202,11 +266,11 @@ func (ds *Dashboard) Run() {
 				an := new(AddNodes)
 				an.AddNodes = []string{node}
 
-				cu := new(ChannelUpdate)
-				cu.Channel = an
+				gu := new(DiGraphUpdate)
+				gu.DiGraph = an
 
 				for _, ws := range ds.websockets {
-					websocket.JSON.Send(ws, cu)
+					websocket.JSON.Send(ws, gu)
 				}
 
 				ds.directedGraph.Nodes[node] = struct{}{}
@@ -232,11 +296,11 @@ func (ds *Dashboard) Run() {
 				rn := new(RemoveNodes)
 				rn.RemoveNodes = []string{node}
 
-				cu := new(ChannelUpdate)
-				cu.Channel = rn
+				gu := new(DiGraphUpdate)
+				gu.DiGraph = rn
 
 				for _, ws := range ds.websockets {
-					websocket.JSON.Send(ws, cu)
+					websocket.JSON.Send(ws, gu)
 				}
 
 				delete(ds.directedGraph.Nodes, node)
@@ -256,11 +320,11 @@ func (ds *Dashboard) Run() {
 				ae := new(AddEdges)
 				ae.AddEdges = []Edge{edge}
 
-				cu := new(ChannelUpdate)
-				cu.Channel = ae
+				gu := new(DiGraphUpdate)
+				gu.DiGraph = ae
 
 				for _, ws := range ds.websockets {
-					websocket.JSON.Send(ws, cu)
+					websocket.JSON.Send(ws, gu)
 				}
 
 				ds.directedGraph.Edges[edgeId] = edge
@@ -282,11 +346,11 @@ func (ds *Dashboard) Run() {
 				ue := new(UpdateEdges)
 				ue.UpdateEdges = []Edge{existingEdge}
 
-				cu := new(ChannelUpdate)
-				cu.Channel = ue
+				gu := new(DiGraphUpdate)
+				gu.DiGraph = ue
 
 				for _, ws := range ds.websockets {
-					websocket.JSON.Send(ws, cu)
+					websocket.JSON.Send(ws, gu)
 				}
 
 
