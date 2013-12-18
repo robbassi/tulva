@@ -149,7 +149,7 @@ func NewDiskIO(metaInfo MetaInfo, graphCh chan GraphStateChange) *DiskIO {
 	diskio.contChans.receivedPiece = make(chan ReceivedPiece)
 	diskio.graphCh = graphCh
 	go func() {
-		graphCh <- AddNodeMessage("DiskIO")
+		graphCh <- AddNodeMessage("DiskIO", "D")
 	}()
 	return diskio
 }

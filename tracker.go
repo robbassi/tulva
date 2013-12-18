@@ -184,7 +184,7 @@ func newTracker(key string, chans trackerPeerChans, port uint16, infoHash []byte
 	tracker.infoHash = make([]byte, len(infoHash))
 	tracker.graphCh = graphCh
 	go func() {
-		graphCh <- AddNodeMessage("Tracker")
+		graphCh <- AddNodeMessage("Tracker", "T")
 		graphCh <- AddEdgeMessage("Tracker", "PeerManager", "Peer", 100)
 	}()
 	copy(tracker.infoHash, infoHash)
@@ -195,9 +195,10 @@ func NewTrackerManager(port uint16, statsCh chan CurrentStats, graphCh chan Grap
 	chans := new(trackerPeerChans)
 	chans.peers = make(chan PeerTuple)
 	chans.stats = make(chan CurrentStats)
+	/*
 	go func() {
-		graphCh <- AddNodeMessage("TrackerManager")
-	}()
+		graphCh <- AddNodeMessage("TrackerManager", "TM")
+	}()*/
 	return &trackerManager{peerChans: *chans, port: port, statsCh: statsCh, graphCh: graphCh}
 }
 
