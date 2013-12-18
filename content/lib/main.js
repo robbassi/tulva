@@ -1,7 +1,7 @@
 var socket = new WebSocket("ws://localhost:8080/ws", "protocolOne");
 
-initializeDiGraph();
-initThroughputChart();
+initDiGraph();
+//initThroughputChart();
 
 socket.onopen = function() {
 	console.log("SOCKET OPENED");
@@ -12,7 +12,7 @@ socket.onmessage = function(msg) {
 	var json = JSON.parse(msg.data);
 	if (json.Stats) {
 		console.log("Received Stats data");
-		handleStatsMessage(json.Stats);
+		//handleStatsMessage(json.Stats);
 	} else if (json.DiGraph) {
 		console.log("Received DiGraph data");
 		handleDiGraphMessage(json.DiGraph);
