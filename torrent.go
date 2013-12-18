@@ -117,6 +117,14 @@ func (t *Torrent) Run() {
 
 	graphCh := make(chan GraphStateChange)
 
+	stats := NewStats()
+	dashboard := NewDashboard(stats.dashboardCh, graphCh, len(pieceHashes))
+	go dashboard.Run()
+
+	// Sleep for 2 seconds so the initial graph setup can be seen
+	// on the client. 
+	time.Sleep(time.Second * 2)
+
 	diskIO := NewDiskIO(t.metaInfo, graphCh)
 	diskIO.Init()
 	pieces := diskIO.Verify()
@@ -140,14 +148,7 @@ func (t *Torrent) Run() {
 	log.Printf("Torrent : Run : The torrent contains %d file(s), which are split across %d pieces", numFiles, (len(t.metaInfo.Info.Pieces) / 20))
 	log.Printf("Torrent : Run : The total length of all file(s) is %d", totalLength)
 
-	stats := NewStats()
 	server := NewServer(graphCh)
-	dashboard := NewDashboard(stats.dashboardCh, graphCh, len(pieceHashes))
-	go dashboard.Run()
-
-	// Sleep for 2 seconds so the initial graph setup can be seen
-	// on the client. 
-	time.Sleep(time.Second * 2)
 
 	trackerManager := NewTrackerManager(server.Port, stats.trackerCh, graphCh)
 	peerManager := NewPeerManager(t.infoHash, len(pieceHashes), t.metaInfo.Info.PieceLength, totalLength, diskIO.peerChans, server.peerChans, stats.peerCh, trackerManager.peerChans, graphCh)
