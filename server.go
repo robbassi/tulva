@@ -38,7 +38,7 @@ func NewServer(graphCh chan GraphStateChange) *Server {
 	log.Println("Server : Listening on port", sv.Port)
 
 	go func() {
-		graphCh <- AddNodeMessage("Server")
+		graphCh <- AddNodeMessage("Server", "S")
 	}()
 
 	return sv

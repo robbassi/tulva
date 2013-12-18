@@ -244,7 +244,7 @@ func NewPeerManager(infoHash []byte, numPieces int, pieceLength int, totalLength
 	pm.peerContChans.havePiece = make(chan chan HavePiece)
 	pm.graphCh = graphCh
 	go func() {
-		graphCh <- AddNodeMessage("PeerManager")
+		graphCh <- AddNodeMessage("PeerManager", "PM")
 		graphCh <- AddEdgeMessage("Server", "PeerManager", "Peer", 100)
 	}()
 
@@ -300,7 +300,7 @@ func NewPeer(
 		graphCh: 		  graphCh,
 		downloads:        make([]*PieceDownload, 0)}
 	go func() {
-		graphCh <- AddNodeMessage(peerName)
+		graphCh <- AddNodeMessage(peerName, "P")
 		graphCh <- AddEdgeMessage(peerName, "DiskIO", "Piece", 100)
 		graphCh <- AddEdgeMessage("Controller", peerName, "Request", 100)
 	}()
@@ -663,7 +663,7 @@ func (p *Peer) reader() {
 	defer log.Printf("Peer (%s) : reader : Completed", p.peerName)
 
 	go func() {
-		p.graphCh <- AddNodeMessage(p.peerName + "(R)")
+		p.graphCh <- AddNodeMessage(p.peerName + "(R)", "PR")
 		p.graphCh <- AddEdgeMessage(p.peerName + "(R)", p.peerName, "Read", 100)
 	}()
 
@@ -760,7 +760,7 @@ func (p *Peer) writer() {
 	defer log.Println("Peer : writer : Completed:", p.peerName)
 
 	go func() {
-		p.graphCh <- AddNodeMessage(p.peerName + "(W)")
+		p.graphCh <- AddNodeMessage(p.peerName + "(W)", "PW")
 		p.graphCh <- AddEdgeMessage(p.peerName, p.peerName + "(W)", "Write", 100)
 	}()
 

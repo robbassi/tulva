@@ -153,7 +153,7 @@ func NewController(finishedPieces []bool, pieceHashes [][]byte, diskIOChans Cont
 	cont.dashboardPieceChan = dashboardPieceChan
 	cont.graphCh = graphCh
 	go func() {
-		graphCh <- AddNodeMessage("Controller")
+		graphCh <- AddNodeMessage("Controller", "C")
 		graphCh <- AddEdgeMessage("PeerManager", "Controller", "NewPeers", 100)
 		graphCh <- AddEdgeMessage("DiskIO", "Controller", "ReceivedPiece", 100)
 	}()
