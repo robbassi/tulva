@@ -1,7 +1,7 @@
 var throughputData = []
 var socket = new WebSocket("ws://localhost:8080/ws", "protocolOne");
 
-//initializeDiGraph();
+initDiGraph();
 //initThroughputChart();
 
 socket.onopen = function() {
@@ -16,7 +16,7 @@ socket.onmessage = function(msg) {
 		updateStats(json.Stats);
 	} else if (json.DiGraph) {
 		console.log("Received DiGraph data");
-		//handleDiGraphMessage(json.DiGraph);
+		handleDiGraphMessage(json.DiGraph);
 	} else if (json.Progress) {
 		console.log("Received Progress data");
 		handleProgressMessage(json.Progress);
