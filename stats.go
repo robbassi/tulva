@@ -13,6 +13,8 @@ type StatsCollector struct {
 	Left          int
 	Uploaded      int
 	Downloaded    int
+	UploadedLast  int
+	DownloadedLast int
 	Errors        int
 	lastUploads   []int
 	lastDownloads []int
@@ -44,7 +46,7 @@ func (s *StatsCollector) Run() {
 	log.Println("StatsCollector : Run : Started")
 	defer log.Println("StatsCollector : Run : Stopped")
 
-	s.ticker = time.Tick(time.Second * 1)
+	s.ticker = time.Tick(time.Second)
 	i := 0
 
 	for {
@@ -54,8 +56,13 @@ func (s *StatsCollector) Run() {
 			s.Uploaded += stat.write
 			s.Errors += stat.errors
 		case <-s.ticker:
-			s.lastDownloads[i] = s.Downloaded
-			s.lastUploads[i] = s.Uploaded
+			// store the difference of bytes downloaded in the last tick
+			s.lastDownloads[i] = s.Downloaded - s.DownloadedLast
+			s.lastUploads[i] = s.Uploaded - s.UploadedLast
+			// keep track of bytes downloaded in this tick
+			s.DownloadedLast = s.Downloaded
+			s.UploadedLast = s.Uploaded
+			// calculate a trailing average of the download and upload rates over the last 5 ticks
 			total := 0
 			for _, octets := range s.lastDownloads {
 				total += octets
@@ -66,9 +73,11 @@ func (s *StatsCollector) Run() {
 				total += octets
 			}
 			uploadRate := float64(total) / 5
+			// send the calculated and total stats to tracker and dashboard
 			currentStats := CurrentStats{DownloadRate: downloadRate, UploadRate: uploadRate, Downloaded: s.Downloaded, Uploaded: s.Uploaded}
 			go func() { s.trackerCh <- currentStats }()
 			go func() { s.dashboardCh <- currentStats }()
+			// increment the array counter or reset to zero on every fifth iteration
 			i++
 			if i%5 == 0 {
 				i = 0
