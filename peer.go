@@ -565,7 +565,7 @@ func (p *Peer) decodeMessage(payload []byte) {
 		blockNum := begin / downloadBlockSize
 
 		if !p.haveCurrentDownloads() {
-			log.Printf("WARNING: Received piece %x:%x from %s but there aren't any current downloads", pieceNum, begin, p.peerName)
+			//log.Printf("WARNING: Received piece %x:%x from %s but there aren't any current downloads", pieceNum, begin, p.peerName)
 			return
 		} else if begin%downloadBlockSize != 0 {
 			log.Fatalf("Received a Block (Piece) message from %s with an invalid begin value of %x", p.peerName, begin)
