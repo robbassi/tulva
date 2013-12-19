@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"time"
+	"math"
 )
 
 type Torrent struct {
@@ -115,24 +116,29 @@ func (t *Torrent) Run() {
 		pieceHashes = append(pieceHashes, []byte(t.metaInfo.Info.Pieces[offset:offset+20]))
 	}
 
-	graphCh := make(chan GraphStateChange)
-
-	diskIO := NewDiskIO(t.metaInfo, graphCh)
-	diskIO.Init()
-	pieces := diskIO.Verify()
-
-	go diskIO.Run()
-
+	fileInfo := make([]FileInfo,0)
 	totalLength := 0
 	numFiles := 0
 	if t.metaInfo.Info.Length != 0 {
 		// There is a single file
 		totalLength = t.metaInfo.Info.Length
 		numFiles = 1
+		file := new(FileInfo)
+		file.FileName = t.metaInfo.Info.Name
+		file.FirstPiece = 0
+		file.LastPiece = len(pieceHashes) - 1
+		fileInfo = append(fileInfo, *file)
 	} else {
 		// There are multiple files
 		for i := 0; i < len(t.metaInfo.Info.Files); i++ {
+			file := new(FileInfo)
+			file.FileName = t.metaInfo.Info.Files[i].Path[len(t.metaInfo.Info.Files[i].Path) - 1]
+			file.FirstPiece = int(math.Floor(float64(totalLength) / float64(t.metaInfo.Info.PieceLength)))
 			totalLength += t.metaInfo.Info.Files[i].Length
+			file.LastPiece = int(math.Floor(float64(totalLength) / float64(t.metaInfo.Info.PieceLength)))
+			fileInfo = append(fileInfo, *file)
+			log.Printf("File: %s, Length: %d", t.metaInfo.Info.Files[i].Path, t.metaInfo.Info.Files[i].Length)
+			log.Printf("FirstPiece: %d, LastPiece: %d", file.FirstPiece, file.LastPiece)
 			numFiles += 1
 		}
 	}
@@ -140,14 +146,23 @@ func (t *Torrent) Run() {
 	log.Printf("Torrent : Run : The torrent contains %d file(s), which are split across %d pieces", numFiles, (len(t.metaInfo.Info.Pieces) / 20))
 	log.Printf("Torrent : Run : The total length of all file(s) is %d", totalLength)
 
+	graphCh := make(chan GraphStateChange)
+
 	stats := NewStats()
-	server := NewServer(graphCh)
-	dashboard := NewDashboard(stats.dashboardCh, graphCh, len(pieceHashes))
+	dashboard := NewDashboard(stats.dashboardCh, graphCh, len(pieceHashes), fileInfo)
 	go dashboard.Run()
 
 	// Sleep for 2 seconds so the initial graph setup can be seen
 	// on the client. 
 	time.Sleep(time.Second * 2)
+
+	diskIO := NewDiskIO(t.metaInfo, graphCh)
+	diskIO.Init()
+	pieces := diskIO.Verify()
+
+	go diskIO.Run()
+
+	server := NewServer(graphCh)
 
 	trackerManager := NewTrackerManager(server.Port, stats.trackerCh, graphCh)
 	peerManager := NewPeerManager(t.infoHash, len(pieceHashes), t.metaInfo.Info.PieceLength, totalLength, diskIO.peerChans, server.peerChans, stats.peerCh, trackerManager.peerChans, graphCh)

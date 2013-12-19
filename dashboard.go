@@ -59,6 +59,20 @@ type FinishedPieces struct {
 	FinishedPieces []ReceivedPiece
 }
 
+type ProgressUpdate struct {
+	Progress interface{}
+}
+
+type AddFiles struct {
+	AddFiles []FileInfo
+}
+
+type FileInfo struct {
+	FileName string
+	FirstPiece int
+	LastPiece int
+}
+
 type StatsUpdate struct {
 	Stats interface{}
 }
@@ -154,9 +168,10 @@ type Dashboard struct {
 	finishedPieces FinishedPieces
 	graphCh    	  chan GraphStateChange
 	directedGraph DirectedGraph
+	fileInfo      []FileInfo
 }
 
-func NewDashboard(statsCh chan CurrentStats, graphCh chan GraphStateChange, totalPieces int) *Dashboard {
+func NewDashboard(statsCh chan CurrentStats, graphCh chan GraphStateChange, totalPieces int, fileInfo []FileInfo) *Dashboard {
 	return &Dashboard{
 		pieces:        make([]ReceivedPiece, 0),
 		pieceChan:     make(chan chan ReceivedPiece),
@@ -166,6 +181,7 @@ func NewDashboard(statsCh chan CurrentStats, graphCh chan GraphStateChange, tota
 		graphCh: 	   graphCh,
 		totalPieces:   totalPieces,
 		directedGraph: *NewDirectedGraph(),
+		fileInfo:      fileInfo,
 	}
 }
 
@@ -227,6 +243,11 @@ func (ds *Dashboard) Run() {
 			}
 		case ws := <-ds.websocketChan:
 			ds.websockets[ws.Request().RemoteAddr] = ws
+
+			files := AddFiles{AddFiles: ds.fileInfo}
+			progressUpdate := ProgressUpdate{Progress: files}
+			websocket.JSON.Send(ws, progressUpdate)
+
 			var totalPieces TotalPieces
 			totalPieces.TotalPieces = ds.totalPieces
 			pieceTotal := &PieceUpdate{Piece: totalPieces}
@@ -252,7 +273,6 @@ func (ds *Dashboard) Run() {
 
 			edgeUpdate := DiGraphUpdate{DiGraph: AddEdges{AddEdges: edges}}
 			websocket.JSON.Send(ws, edgeUpdate)
-
 
 		case stats := <-ds.statsCh:
 			statsUpdate := &StatsUpdate{Stats: stats}
