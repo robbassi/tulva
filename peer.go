@@ -707,7 +707,7 @@ func (p *Peer) reader() {
 		p.lastRxMessage = time.Now()
 		p.stats.addRead(n)
 
-		log.Printf("Peer (%s) read %d bytes", p.peerName, n + 4)
+		//log.Printf("Peer (%s) read %d bytes", p.peerName, n + 4)
 		go p.queueReceivedPayload(payload)
 		//go p.decodeMessage(payload)
 	}
@@ -1021,13 +1021,18 @@ func (p *Peer) updateOurBitfield(havePieces []HavePiece) {
 
 func (p *Peer) Stop() error {
 	log.Println("Peer : Stop : Stopping:", p.peerName)
-	go func() {
-		p.graphCh <- RemoveNodeMessage(p.peerName)
-		p.graphCh <- RemoveNodeMessage(p.peerName + "(W)")
-		p.graphCh <- RemoveNodeMessage(p.peerName + "(R)")
-	}()
-	p.t.Kill(nil)
-	return p.t.Wait()
+		if p != nil && p.t.Err() != nil && p.t.Err().Error() == "tomb: still alive" {
+		go func() {
+			p.graphCh <- RemoveNodeMessage(p.peerName)
+			p.graphCh <- RemoveNodeMessage(p.peerName + "(W)")
+			p.graphCh <- RemoveNodeMessage(p.peerName + "(R)")
+		}()
+		p.t.Kill(nil)
+		log.Println(p.t.Err())
+		return p.t.Wait()
+	} else {
+		return nil
+	}
 }
 
 func (p *Peer) processCancelFromController(cancelPiece CancelPiece) {
