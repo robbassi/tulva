@@ -1056,7 +1056,7 @@ func (p *Peer) Run() {
 	log.Println("Peer : Run : Started:", p.peerName)
 	defer log.Println("Peer : Run : Completed:", p.peerName)
 
-	p.ticker = time.Tick(time.Second * 1)
+	p.ticker = time.Tick(time.Second)
 
 	p.sendHandshake()
 
@@ -1082,7 +1082,14 @@ func (p *Peer) Run() {
 				p.Stop()
 			}
 			go func() {
-				p.statsCh <- p.stats
+				// send the stats to stats collector and reset our counters
+				p.stats.mu.Lock()
+				stats := p.stats
+				p.stats.read = 0
+				p.stats.write = 0
+				p.stats.errors = 0
+				p.stats.mu.Unlock()
+				p.statsCh <- stats
 			}()
 		case blockResponse := <-p.blockResponse:
 			go p.sendBlock(blockResponse.info.pieceIndex, blockResponse.info.begin, blockResponse.data)
