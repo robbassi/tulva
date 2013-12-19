@@ -78,15 +78,15 @@ function updateProgress() {
         return d.row;
       })
       .text(function(d) {
-      	console.log("UPDATING TEXT FOR BAR");
-      	console.log(d);
-      	console.log("RETURN: " + ((d.finishedPieces / d.totalPieces) * 100).toFixed(2) + "%");
+      	//console.log("UPDATING TEXT FOR BAR");
+      	//console.log(d);
+      	//console.log("RETURN: " + ((d.finishedPieces / d.totalPieces) * 100).toFixed(2) + "%");
       	return ((d.finishedPieces / d.totalPieces) * 100).toFixed(2) + "%";
       })
       .style("width", function(d) {
-      	console.log("UPDATING STYLE FOR BAR")
-      	console.log(d)
-      	console.log("RETURN: " + ((d.finishedPieces / d.totalPieces) * 100) + "%");
+      	//console.log("UPDATING STYLE FOR BAR")
+      	//console.log(d)
+      	//console.log("RETURN: " + ((d.finishedPieces / d.totalPieces) * 100) + "%");
       	return ((d.finishedPieces / d.totalPieces) * 100) + "%";
       });
       //.text("" + (percentage * 100).toFixed(2) + "%")

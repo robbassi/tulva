@@ -27,7 +27,7 @@ function initPiecesGrid(numPieces) {
   console.log("pieces grid width: " + width)
   var gridArray = createGridArray(width, height, numPieces);
   var sideLength = squareSideLength(width, height, numPieces);
-  console.log(gridArray);
+  //console.log(gridArray);
 
   var grid = piecesDiv.append("svg")
                 .attr("width", width)
