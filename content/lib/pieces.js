@@ -180,7 +180,7 @@ function markFinishedPieces(pieceNums) {
 
   svg.selectAll(".piece")
       .data(targetPieces, function(d) {
-        return "" + d.x + d.y;
+        return "" + d.x + "-" + d.y;
       })
       .style("fill", "forestgreen");
 
