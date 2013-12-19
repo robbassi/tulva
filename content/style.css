@@ -90,4 +90,8 @@ svg {
   stroke: #000;
   shape-rendering: crispEdges;
 }
- 
+path {
+	stroke: steelblue;
+	stroke-width: 1;
+	fill: none;
+}
