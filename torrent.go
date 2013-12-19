@@ -126,7 +126,7 @@ func (t *Torrent) Run() {
 		file := new(FileInfo)
 		file.FileName = t.metaInfo.Info.Name
 		file.FirstPiece = 0
-		file.LastPiece = len(pieceHashes)
+		file.LastPiece = len(pieceHashes) - 1
 		fileInfo = append(fileInfo, *file)
 	} else {
 		// There are multiple files
