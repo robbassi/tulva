@@ -1,22 +1,20 @@
-var width = Math.floor(d3.select("#throughput").style('width').replace(/[^\d.-]/g,''))
-var id="#throughput", height=200, interpolation="basis", animate=true, updateDelay=1000, transitionDelay=1000;
 		// create an SVG element inside the #graph div that fills 100% of the div
-		var graph = d3.select(id).append("svg:svg").attr("width", "100%").attr("height", "100%");
+		var graph = d3.select("#throughput").append("svg:svg").attr("width", "100%").attr("height", "100%");
 
 		// create a simple data array that we'll plot with a line (this array represents only the Y values, X will just be the index location)
 		var download = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 		var upload = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 		// X scale will fit values from 0-10 within pixels 0-100
-		var x = d3.scale.linear().domain([0, 48]).range([-5, width]); // starting point is -5 so the first value doesn't show and slides off the edge as part of the transition
+		var x = d3.scale.linear().domain([0, 48]).range([-5, Math.floor(d3.select("#throughput").style('width').replace(/[^\d.-]/g,''))]); // starting point is -5 so the first value doesn't show and slides off the edge as part of the transition
 		// Y scale will fit values from 0-10 within pixels 0-100
-		var y = d3.scale.linear().domain([0, 4000]).range([height, 0]);
+		var y = d3.scale.linear().domain([0, 4000]).range([200, 0]);
 
 		// create a line object that represents the SVG line we're creating
 		var line = d3.svg.line()
 			.x(function(d,i) { return x(i); })
 			.y(function(d) { return y(d); })
-			.interpolate(interpolation)
+			.interpolate("basis")
 	
 			// display the line by appending an svg:path element with the data line we created above
 			graph.append("svg:path").attr("d", line(download));
@@ -33,7 +31,7 @@ var id="#throughput", height=200, interpolation="basis", animate=true, updateDel
 					.attr("d", line) // apply the new data values ... but the new value is hidden at this point off the right of the canvas
 					.transition() // start a transition to bring the new value into view
 					.ease("linear")
-					.duration(transitionDelay) // for this demo we want a continual slide so set this to the same as the setInterval amount below
+					.duration(1000) // for this demo we want a continual slide so set this to the same as the setInterval amount below
 					.attr("transform", "translate(" + x(0) + ")"); // animate a slide to the left back to x(0) pixels to reveal the new value
 			}
 			function redrawUpload() {
@@ -43,7 +41,7 @@ var id="#throughput", height=200, interpolation="basis", animate=true, updateDel
 					.attr("d", line) // apply the new data values ... but the new value is hidden at this point off the right of the canvas
 					.transition() // start a transition to bring the new value into view
 					.ease("linear")
-					.duration(transitionDelay) // for this demo we want a continual slide so set this to the same as the setInterval amount below
+					.duration(1000) // for this demo we want a continual slide so set this to the same as the setInterval amount below
 					.attr("transform", "translate(" + x(0) + ")"); // animate a slide to the left back to x(0) pixels to reveal the new value
 			}
 			
