@@ -8,7 +8,7 @@
 		// X scale will fit values from 0-10 within pixels 0-100
 		var x = d3.scale.linear().domain([0, 48]).range([-5, Math.floor(d3.select("#throughput").style('width').replace(/[^\d.-]/g,''))]); // starting point is -5 so the first value doesn't show and slides off the edge as part of the transition
 		// Y scale will fit values from 0-10 within pixels 0-100
-		var y = d3.scale.linear().domain([0, 4000]).range([200, 0]);
+		var y = d3.scale.linear().domain([0, 10000]).range([200, 0]);
 
 		// create a line object that represents the SVG line we're creating
 		var line = d3.svg.line()
