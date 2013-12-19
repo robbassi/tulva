@@ -1,5 +1,5 @@
 var throughputData = []
-var socket = new WebSocket("ws://localhost:8080/ws", "protocolOne");
+var socket = new WebSocket("ws://" + window.location.host + "/ws", "protocolOne");
 
 initDiGraph();
 //initThroughputChart();
