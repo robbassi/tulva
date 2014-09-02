@@ -6,19 +6,20 @@ package main
 
 import (
 	"bytes"
-	"code.google.com/p/bencode-go"
 	"crypto/sha1"
 	"errors"
 	"log"
 	"os"
 	"time"
+
+	"github.com/jackpal/bencode-go"
 )
 
 type Torrent struct {
 	metaInfo MetaInfo
 	infoHash []byte
 	peer     chan PeerTuple
-	quit	 chan struct{}
+	quit     chan struct{}
 	Stats    Stats
 }
 
