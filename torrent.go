@@ -23,21 +23,23 @@ type Torrent struct {
 	Stats    Stats
 }
 
+type Info struct {
+	PieceLength int "piece length"
+	Pieces      string
+	Private     int
+	Name        string
+	Length      int
+	Md5sum      string
+	Files       []struct {
+		Length int
+		Md5sum string
+		Path   []string
+	}
+}
+
 // Metainfo File Structure
 type MetaInfo struct {
-	Info struct {
-		PieceLength int "piece length"
-		Pieces      string
-		Private     int
-		Name        string
-		Length      int
-		Md5sum      string
-		Files       []struct {
-			Length int
-			Md5sum string
-			Path   []string
-		}
-	}
+	Info         *Info
 	Announce     string
 	AnnounceList [][]string "announce-list"
 	CreationDate int        "creation date"

@@ -28,34 +28,39 @@ func init() {
 }
 
 func main() {
-	if len(os.Args) != 2 {
+	switch {
+	case len(os.Args) == 2:
+		quit := make(chan struct{})
+		t, err := NewTorrent(os.Args[1], quit)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("main : main : Started")
+		defer log.Println("main : main : Exiting")
+
+		go func() {
+			log.Println(http.ListenAndServe("localhost:6060", nil))
+		}()
+
+		// Signal handler to catch Ctrl-C and SIGTERM from 'kill' command
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			// Block waiting for a signal
+			<-c
+			// Unregister the signal handler
+			signal.Stop(c)
+			log.Println("Received Interrupt. Shutting down...")
+			close(t.quit)
+		}()
+
+		// Launch the torrent
+		t.Run()
+
+	case len(os.Args) == 3 && os.Args[1] == "maketorrentfile":
+		t := MakeTorrentFile(os.Args[2])
+		log.Println("Made torrent File:", t.Name())
+	default:
 		log.Fatalf("Usage: %s: <torrent file>\n", os.Args[0])
 	}
-
-	quit := make(chan struct{})
-	t, err := NewTorrent(os.Args[1], quit)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("main : main : Started")
-	defer log.Println("main : main : Exiting")
-
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-
-	// Signal handler to catch Ctrl-C and SIGTERM from 'kill' command
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		// Block waiting for a signal
-		<-c
-		// Unregister the signal handler
-		signal.Stop(c)
-		log.Println("Received Interrupt. Shutting down...")
-		close(t.quit)
-	}()
-
-	// Launch the torrent
-	t.Run()
 }
