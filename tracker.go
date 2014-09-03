@@ -5,8 +5,9 @@
 package main
 
 import (
-	"code.google.com/p/bencode-go"
 	"encoding/hex"
+
+	"github.com/jackpal/bencode-go"
 	//"fmt"
 	"log"
 	"math/rand"
